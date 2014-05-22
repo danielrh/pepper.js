@@ -124,6 +124,7 @@ JS_PRE=$(PEPPERJS_SRC_ROOT)/ppapi_preamble.js $(PEPPERJS_SRC_ROOT)/third_party/i
 WRAPPERS= \
     base.js \
     url_loader.js \
+    web_socket.js \
     graphics_2d.js \
     view.js \
     graphics_3d.js \
