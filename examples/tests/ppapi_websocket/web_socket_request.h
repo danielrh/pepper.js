@@ -8,27 +8,25 @@
 #include <vector>
 
 #include "ppapi/c/ppb_file_io.h"
-#include "ppapi/c/ppb_file_ref.h"
-#include "ppapi/c/ppb_url_loader.h"
-#include "ppapi/c/ppb_url_request_info.h"
-#include "ppapi/c/ppb_url_response_info.h"
+#include "ppapi/c/ppb_websocket.h"
 #include "ppapi/c/pp_instance.h"
 #include "ppapi/c/pp_resource.h"
 #include "ppapi/c/pp_stdint.h"
 //#include "ppapi/c/trusted/ppb_file_io_trusted.h"
 
 
-class UrlLoadRequest {
+class WebSocketRequest {
  public:
-  explicit UrlLoadRequest(PP_Instance instance);
-  ~UrlLoadRequest();
-  bool Load(bool stream_as_file, std::string url);
+  explicit WebSocketRequest(PP_Instance instance);
+  ~WebSocketRequest();
+  bool Load(std::string hex_data, std::string url);
 
   void OpenCallback(int32_t pp_error);
   // Loading/reading via response includes the following asynchronous steps:
   // 1) URLLoader::Open
   // 2) URLLoader::ReadResponseBody (in a loop until EOF)
-  void ReadResponseBodyCallback(int32_t pp_error_or_bytes);
+  void ReadResponse(int32_t pp_error_or_bytes);
+  void CloseResponse(int32_t pp_error_or_bytes);
   // Loading/reading via file includes the following asynchronous steps:
   // 1) URLLoader::Open
   // 2) URLLoader::FinishStreamingToFile
@@ -52,20 +50,14 @@ class UrlLoadRequest {
   bool ReportFailure(const std::string& message, int32_t pp_error);
 
   bool delete_this_after_report;
-
+  std::string hex_file; // hex encoded characters to send over socket
   std::string url_;
-  bool as_file_;
 
   PP_Instance instance_;
-  PP_Resource request_;
-  PP_Resource loader_;
-  PP_Resource response_;
-  PP_Resource fileio_;
-
-  const PPB_URLRequestInfo* request_interface_;
-  const PPB_URLResponseInfo* response_interface_;
-  const PPB_URLLoader* loader_interface_;
-  const PPB_FileIO* fileio_interface_;
+  PP_Resource websocket_;
+  PP_Var send_array;
+  PP_Var response_array;
+  const PPB_WebSocket* websocket_interface_;
 
   char buffer_[1024];
   std::string url_body_;
