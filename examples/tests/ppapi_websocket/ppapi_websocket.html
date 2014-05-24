@@ -25,14 +25,8 @@
         return str_value == TRUE_STRING_VALUE;
       }
 
-      // Convert a boolean value to the corresponding string value.  |true|
-      // converts to '1', |false| to '0'.
-      function boolToString(bool_value) {
-        return bool_value ? TRUE_STRING_VALUE : FALSE_STRING_VALUE;
-      }
-
       function setupTests(tester, plugin) {
-        function addTest(name, url, as_file, expected_data, expected_success) {
+        function addTest(name, url, hex_encoded_string, expected_data, expected_success) {
           tester.addAsyncTest(name, function(test) {
             var listener = test.wrap(function(test_response) {
                 plugin.removeEventListener('message', listener, false);
@@ -43,11 +37,11 @@
 
                 // Validate the results.
                 var response_url = response_args[0];
-                var response_as_file = stringToBool(response_args[1]);
+                var response_hex_encoded_string = response_args[1];
                 var response_data = response_args[2];
                 var response_success = stringToBool(response_args[3]);
                 test.assert(isMatch(response_url, url));
-                test.assertEqual(response_as_file, as_file);
+                test.assert(isMatch(response_hex_encoded_string, hex_encoded_string));
                 test.log(response_data);
                 test.assert(isMatch(response_data, expected_data));
                 test.assertEqual(response_success, expected_success);
@@ -56,30 +50,25 @@
             plugin.addEventListener('message', listener, false);
 
             // Make the request.
-            var loadUrlMessage = [
-              'loadUrl',
+            var loadWebSocketMessage = [
+              'loadWebSocket',
               url,
-              boolToString(as_file)].join(ARGUMENT_SEPARATOR);
-            plugin.postMessage(loadUrlMessage);
+              hex_encoded_string].join(ARGUMENT_SEPARATOR);
+            plugin.postMessage(loadWebSocketMessage);
           });
         }
 
-        var VALID_URL = 'ppapi_websocket_success.html';
-        var CROSSORIGIN_URL = 'http://www.google.com/robots.txt';
-        var INVALID_URL = 'ppapi_nonexistent_url.html';
-	console.log(plugin);
+        var VALID_URL = 'ws://echo.websocket.org';
+        var INVALID_URL = 'ws://ppapi_nonexistent_url.html';
+        console.log(plugin);
         var is_js = plugin.getAttribute("src").slice(-3) === ".js";
         // JavaScript cannot distinguish NOACCESS from a network failure.
         var NOACCESS = is_js ? 'PP_ERROR_FAILED' : 'PP_ERROR_NOACCESS';
 
-        addTest('Valid', VALID_URL, false, 'TEST PASSED', true);
-        addTest('Valid_File', VALID_URL, true, 'TEST PASSED', true);
-        addTest('CrossOrigin', CROSSORIGIN_URL, false, NOACCESS,
-                 false);
-        addTest('CrossOrigin_File', CROSSORIGIN_URL, true, NOACCESS,
-                 false);
-        addTest('Invalid', INVALID_URL, false, '404', false);
-        addTest('Invalid_File', INVALID_URL, true, '404', false);
+        addTest('Valid', VALID_URL, '6162636465666768696a6b6c6d6e6f70', '6162636465666768696a6b6c6d6e6f70', true);//abcdefghijklmnop
+        addTest('Valid_File', VALID_URL, 'f0288c28000a0dffeeeffe', 'f0288c28000a0dffeeeffe', true);//invalid unicode codepoint
+        addTest('Invalid', INVALID_URL, "WebSocketRequest::OpenCallback: PP_ERROR_FAILED", "WebSocketRequest::OpenCallback: PP_ERROR_FAILED", false);
+//        addTest('Invalid_File', INVALID_URL, '0a0a0a0a', '404', false);
       }
       //]]>
     </script>
@@ -95,7 +84,7 @@
       //<![CDATA[
       // TODO(ncbray) allow the test to run in parallel
       var tester = new Tester();
-      var e = createTestModule("ppapi_geturl", 0, 0);
+      var e = createTestModule("ppapi_websocket", 0, 0);
       setupTests(tester, e);
       tester.waitFor(e);
       tester.run();

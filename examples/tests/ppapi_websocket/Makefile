@@ -36,7 +36,7 @@ TARGET=ppapi_websocket
 #
 SOURCES= \
   ppapi_websocket.cc \
-  url_load_request.cc \
+  web_socket_request.cc \
   module.cc \
 
 #

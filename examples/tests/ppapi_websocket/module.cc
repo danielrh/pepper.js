@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "tests/ppapi_geturl/module.h"
+#include "tests/ppapi_websocket/module.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +13,7 @@
 //#include "native_client/src/include/nacl_macros.h"
 //#include "native_client/src/include/portability.h"
 //#include "native_client/src/shared/platform/nacl_check.h"
-#include "tests/ppapi_geturl/url_load_request.h"
+#include "tests/ppapi_websocket/web_socket_request.h"
 
 #include "ppapi/c/pp_completion_callback.h"
 #include "ppapi/c/pp_errors.h"
@@ -26,7 +26,7 @@ namespace {
 // These constants need to match their corresponding JavaScript values in
 // ppapi_geturl.html.  The JavaScript variables are all upper-case; for example
 // kTrueStringValue corresponds to TRUE_STRING_VALUE.
-const char* const kLoadUrlMethodId = "loadUrl";
+const char* const kLoadUrlMethodId = "loadWebSocket";
 const char* const kTrueStringValue = "1";
 const char* const kFalseStringValue = "0";
 static const char kArgumentSeparator = '|';
@@ -74,7 +74,7 @@ void Messaging_HandleMessage(PP_Instance instance, struct PP_Var var_message) {
   std::string message = Module::Get()->VarToStr(var_message);
   Module::Get()->ppb_var_interface()->Release(var_message);
   printf("--- Messaging_HandleMessage(%s)\n", message.c_str());
-  // Look for the "loadUrl" message.  The expected string format looks like:
+  // Look for the "loadWebSocket" message.  The expected string format looks like:
   //     loadUrl|<url>|<stream_as_file>
   // loadUrl is a string literal
   // <url> is the URL used to make the GET request in UrlLoader
@@ -87,42 +87,40 @@ void Messaging_HandleMessage(PP_Instance instance, struct PP_Var var_message) {
   if (url_pos == std::string::npos || url_pos + 1 >= message.length())
     return;
 
-  size_t as_file_pos = message.find_first_of(kArgumentSeparator, url_pos + 1);
-  if (as_file_pos == std::string::npos || as_file_pos + 1 >= message.length())
+  size_t ping_data_pos = message.find_first_of(kArgumentSeparator, url_pos + 1);
+  if (ping_data_pos == std::string::npos || ping_data_pos + 1 >= message.length())
     return;
 
-  size_t url_length = as_file_pos - url_pos;
+  size_t url_length = ping_data_pos - url_pos;
   if (url_length == 0)
     return;
   std::string url = message.substr(url_pos + 1, url_length - 1);
 
   // If the second argument is a '1', assume it means |stream_as_file| is
   // true.  Anything else means |stream_as_file| is false.
-  bool stream_as_file = message.compare(as_file_pos + 1,
-                                        1,
-                                        kTrueStringValue) == 0;
+  std::string hex_encoded_message = message.substr(ping_data_pos + 1);
 
   printf("--- Messaging_HandleMessage(method='%s', "
                                       "url='%s', "
-                                      "stream_as_file='%s')\n",
+                                      "hexdump='%s')\n",
          message.c_str(),
          url.c_str(),
-         stream_as_file ? "true" : "false");
+         hex_encoded_message.c_str());
   fflush(stdout);
 
-  UrlLoadRequest* url_load_request = new UrlLoadRequest(instance);
-  if (NULL == url_load_request) {
+  WebSocketRequest* web_socket_request = new WebSocketRequest(instance);
+  if (NULL == web_socket_request) {
     Module::Get()->ReportResult(instance,
                                 url.c_str(),
-                                stream_as_file,
                                 "LoadUrl: memory allocation failed",
+                                strlen("LoadUrl: memory allocation failed"),
                                 false);
     return;
   }
-  // On success or failure url_load_request will call ReportResult().
+  // On success or failure web_socket_request will call ReportResult().
   // This is the time to clean it up.
-  url_load_request->set_delete_this_after_report();
-  url_load_request->Load(stream_as_file, url);
+  web_socket_request->set_delete_this_after_report();
+  web_socket_request->Load(hex_encoded_message, url);
 }
 
 Module* Module::Create(PP_Module module_id,
@@ -147,7 +145,8 @@ Module::Module(PP_Module module_id, PPB_GetInterface get_browser_interface)
     get_browser_interface_(get_browser_interface),
     ppb_core_interface_(NULL),
     ppb_messaging_interface_(NULL),
-    ppb_var_interface_(NULL) {
+    ppb_var_interface_(NULL),
+    ppb_var_array_buffer_interface_(NULL) {
   printf("--- Module::Module\n");
   memset(&instance_interface, 0, sizeof(instance_interface));
   instance_interface.DidCreate = Instance_DidCreate;
@@ -161,13 +160,16 @@ Module::Module(PP_Module module_id, PPB_GetInterface get_browser_interface)
 
   ppb_core_interface_ =
       static_cast<const PPB_Core*>(
-          GetBrowserInterface(PPB_CORE_INTERFACE));
+          this->GetBrowserInterface(PPB_CORE_INTERFACE));
   ppb_messaging_interface_ =
       static_cast<const PPB_Messaging*>(
-          GetBrowserInterface(PPB_MESSAGING_INTERFACE));
+          this->GetBrowserInterface(PPB_MESSAGING_INTERFACE));
   ppb_var_interface_ =
       static_cast<const PPB_Var*>(
-          GetBrowserInterface(PPB_VAR_INTERFACE));
+          this->GetBrowserInterface(PPB_VAR_INTERFACE));
+  ppb_var_array_buffer_interface_ =
+      static_cast<const PPB_VarArrayBuffer*>(
+          this->GetBrowserInterface(PPB_VAR_ARRAY_BUFFER_INTERFACE));
 }
 
 const void* Module::GetPluginInterface(const char* interface_name) {
@@ -224,6 +226,54 @@ PP_Var Module::StrToVar(const char* str) {
   return PP_MakeUndefined();
 }
 
+PP_Var Module::BufferToVar(const char* data, uint32_t length) {
+  Module* module = Get();
+  if (NULL == module)
+    return PP_MakeUndefined();
+  const PPB_VarArrayBuffer* ppb_var = module->ppb_var_array_buffer_interface();
+  if (NULL != ppb_var) {
+    PP_Var retval = ppb_var->Create(length);
+    void * mapped = ppb_var->Map(retval);
+    memcpy(mapped, data, length);
+    ppb_var->Unmap(retval);
+    return retval;
+  }
+  return PP_MakeUndefined();
+}
+
+bool Module::CopyBufferVarData(const PP_Var&var, char* data, uint32_t max_length) {
+  Module* module = Get();
+  if (NULL == module)
+    return false;
+  const PPB_VarArrayBuffer* ppb_var = module->ppb_var_array_buffer_interface();
+  if (NULL != ppb_var) {
+    uint32_t length = 0;
+    if (ppb_var->ByteLength(var, &length)) {
+      char * mapped = reinterpret_cast<char*>(ppb_var->Map(var));
+      memcpy(data, mapped,(length > max_length ? max_length : length));
+      ppb_var->Unmap(var);
+      return max_length >= length;
+    } else {
+        return false;
+    }
+  }
+  return false;
+}
+
+uint32_t Module::BufferVarLength(const PP_Var&var) {
+  Module* module = Get();
+  if (NULL == module)
+    return 0;
+  const PPB_VarArrayBuffer* ppb_var = module->ppb_var_array_buffer_interface();
+  if (NULL != ppb_var) {
+    uint32_t length = 0;
+    if (ppb_var->ByteLength(var, &length)) {
+      return length;
+    }
+  }
+  return 0;
+}
+
 PP_Var Module::StrToVar(const std::string& str) {
   return Module::StrToVar(str.c_str());
 }
@@ -253,17 +303,18 @@ std::string Module::ErrorCodeToStr(int32_t error_code) {
 
 void Module::ReportResult(PP_Instance pp_instance,
                           const char* url,
-                          bool as_file,
-                          const char* text,
+                          const char * data_to_send,
+                          size_t length,
                           bool success) {
-  printf("--- ReportResult('%s', as_file=%d, '%s', success=%d)\n",
-         url, as_file, text, success);
+  std::string msg(data_to_send, length);
+  printf("--- ReportResult('%s', hex_file=%s, success=%d)\n",
+         url, msg.c_str(), success);
   // Post a message with the results back to the browser.
   std::string result(url);
   result += kArgumentSeparator;
-  result += BoolToString(as_file);
+  result += std::string(data_to_send, length);
   result += kArgumentSeparator;
-  result += text;
+  result += std::string(data_to_send, length);
   result += kArgumentSeparator;
   result += BoolToString(success);
   printf("--- ReportResult posts result string:\n\t%s\n", result.c_str());

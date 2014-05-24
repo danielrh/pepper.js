@@ -12,6 +12,7 @@
 #include "ppapi/c/ppb_core.h"
 #include "ppapi/c/ppb_messaging.h"
 #include "ppapi/c/ppb_var.h"
+#include "ppapi/c/ppb_var_array_buffer.h"
 #include "ppapi/c/ppp.h"
 
 // ppapi_websocket example is deliberately using C PPAPI interface.
@@ -32,10 +33,15 @@ class Module {
   }
   const PPB_Var* ppb_var_interface() const { return ppb_var_interface_; }
 
+  const PPB_VarArrayBuffer* ppb_var_array_buffer_interface() const { return ppb_var_array_buffer_interface_; }
+
   static char* VarToCStr(const PP_Var& var);
   static std::string VarToStr(const PP_Var& var);
   static PP_Var StrToVar(const char* str);
   static PP_Var StrToVar(const std::string& str);
+  static PP_Var BufferToVar(const char * data, uint32_t length);
+  static uint32_t BufferVarLength(const PP_Var&var);
+  static bool CopyBufferVarData(const PP_Var&var, char *data, uint32_t maxlength);
   static std::string ErrorCodeToStr(int32_t error_code);
 
   // Constructs a parameterized message string then uses messaging.PostMessage
@@ -43,7 +49,6 @@ class Module {
   // is defined in ppapi_websocket.html
   void ReportResult(PP_Instance pp_instance,
                     const char* url,
-                    bool as_file,
                     const char* data_to_send,
                     size_t data_length,
                     bool success);
@@ -53,6 +58,7 @@ class Module {
   const PPB_Core* ppb_core_interface_;
   const PPB_Messaging* ppb_messaging_interface_;
   const PPB_Var* ppb_var_interface_;
+  const PPB_VarArrayBuffer* ppb_var_array_buffer_interface_;
 
   Module(PP_Module module_id, PPB_GetInterface get_browser_interface);
   ~Module() { }
