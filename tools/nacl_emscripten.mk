@@ -46,9 +46,9 @@ NACL_LDFLAGS+=-Wno-warn-absolute-paths
 # NOTE add --minify 0 to the command line to make the Release mode more readable.
 # It appears that emcc currently assumes --minify will always be used to disable minification, so --minify 1 does not work, rather it also disables minification.
 ifeq ($(CONFIG),Release)
-NACL_LDFLAGS+=-O2 -s RESERVED_FUNCTION_POINTERS=325 --closure 1
+NACL_LDFLAGS+=-O2 -s RESERVED_FUNCTION_POINTERS=512 --closure 1
 else
-NACL_LDFLAGS+=-O0 -s RESERVED_FUNCTION_POINTERS=325 --minify 0
+NACL_LDFLAGS+=-O0 -s RESERVED_FUNCTION_POINTERS=512 --minify 0
 endif
 
 NACL_LDFLAGS+=-s TOTAL_MEMORY=33554432
