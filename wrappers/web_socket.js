@@ -1,4 +1,4 @@
-// Copyright (c) 2013 Google Inc. All rights reserved.
+// Copyright (c) 2014 Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,12 +65,6 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
           
       };
       
-      /* Returns the item at the front of the queue (without dequeuing it). If the
-       * queue is empty then undefined is returned.
-       */
-      this.peek = function(){
-          return (queue.length > 0 ? queue[offset] : undefined);
-      };
   };
 
   var WebSocket_Create = function(instance) {
@@ -86,23 +80,23 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
   function performCallback(socket, data){
       
   }
-  var WebSocket_Connect = function(socket, url, protocols, protocol_count, callback) {
-    if (protocol_count > 1) {
-        // currently don't support protocol lists
+  var WebSocket_Connect = function(socketResource, url, protocols, protocolCount, cCallback) {
+    if (protocolCount > 1) {
+        // TODO(danielrh) currently don't support protocol arrays
+        throw "Multiple specified protocol Support not implemented";
         return ppapi.PP_ERROR_FAILED;
     }
     var protocol = [];
-    if (protocol_count == 1) {
+    if (protocolCount == 1) {
         protocol = [glue.memoryToJSVar(protocols)];
     }
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+    var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return ppapi.PP_ERROR_BADRESOURCE;
     }
-    url = glue.memoryToJSVar(url);
-    callback = glue.getCompletionCallback(callback);
+    var callback = glue.getCompletionCallback(cCallback);
     var req;
-    req = new WebSocket(url, protocol); // FIXME: deal with protocol array
+    req = new WebSocket(glue.memoryToJSVar(url), protocol);
     req.binaryType = "arraybuffer";
     socket.websocket = req;
     socket.closeWasClean = false;
@@ -114,7 +108,7 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
     socket.receiveQueue = new Queue();
 
     req.onclose = function (evt) {
-        if (req.closeCallback !== null && !socket.dead) {
+        if (socket.closeCallback !== null && !socket.dead) {
             socket.closeCallback(ppapi.PP_OK);
             socket.closeCallback = null;
         }
@@ -125,11 +119,11 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
     req.onmessage = function(evt) {
         if (socket.onmessageCallback !== null) {
             var memoryDestination = socket.onmessageWritableVar;
-            var callback = socket.onmessageCallback;
+            var messageCallback = socket.onmessageCallback;
             socket.onmessageWritableVar = null;
             socket.onmessageCallback = null; //set it null now in case callback sets it again
             glue.jsToMemoryVar(evt.data, memoryDestination);
-            callback(ppapi.PP_OK);
+            messageCallback(ppapi.PP_OK);
         } else {
             socket.receiveQueue.enqueue(evt.data);
         }
@@ -151,133 +145,141 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
 
     return ppapi.PP_OK_COMPLETIONPENDING;
   };
+  var hasSocketClassConnected = function(socket) {
+      if (socket.websocket) {
+          return true;
+      } else {
+          return false;
+      }
+  };
 
-  var WebSocket_Close = function(socket, code_u16, reason, callback) {
+  var WebSocket_Close = function(socket, codeUint16, reason, callback) {
     socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return ppapi.PP_ERROR_BADRESOURCE;
+    }
+    if (!hasSocketClassConnected(socket)) {
+        return ppapi.PP_ERROR_FAILED;
     }
     reason = glue.memoryToJSVar(reason);
     if (reason.length > 123) {
         return ppapi.PP_ERROR_BADARGUMENT;
     }
-    if (code_u16 != 1000 && !(code_uint16 >= 3000 && code_uint16 <4999)) {
+    if (codeUint16 != 1000 && !(codeUint16 >= 3000 && codeUint16 < 4999)) {
         return ppapi.PP_ERROR_NOACCESS;
     }
-    if (socket.closeCallback) {
+    if (socket.closeCallback !== null) {
         return ppapi.PP_ERROR_INPROGRESS;
     }
     socket.closeCallback = glue.getCompletionCallback(callback);
-    socket.websocket.close(code_u16, reason);
+    socket.websocket.close(codeUint16, reason);
     return ppapi.PP_OK_COMPLETIONPENDING;
   };
 
-  var WebSocket_ReceiveMessage = function(socket, message_ptr, callback) {
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+  var WebSocket_ReceiveMessage = function(socketResource, messagePtr, cCallback) {
+    var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return ppapi.PP_ERROR_BADRESOURCE;
     }
-    callback = glue.getCompletionCallback(callback);
-    if (!socket.websocket) { // not connected yet
+    if (!hasSocketClassConnected(socket)) {
         return ppapi.PP_ERROR_FAILED;
     }
     if (socket.receiveQueue.isEmpty()) {
-        socket.onmessageWritableVar = message_ptr;
-        socket.onmessageCallback = callback;
+        socket.onmessageWritableVar = messagePtr;
+        socket.onmessageCallback = glue.getCompletionCallback(cCallback);
         return ppapi.PP_OK_COMPLETIONPENDING;
     } else {
-        glue.jsToMemoryVar(evt.data, message_ptr);
+        glue.jsToMemoryVar(socket.receiveQueue.dequeue(), messagePtr);
         return ppapi.PP_OK;
     }
   };
 
-  var WebSocket_SendMessage = function(socket, message) {
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+  var WebSocket_SendMessage = function(socketResource, message) {
+    var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return ppapi.PP_ERROR_BADRESOURCE;
     }
-    if (!socket.websocket) { // not connected yet
-        return ppapi.ERROR_FAILED;
+    if (!hasSocketClassConnected(socket)) {
+        return ppapi.PP_ERROR_FAILED;
     }
     if (socket.websocket.readyState == 0) {
         return ppapi.PP_ERROR_FAILED;
     }
-    message = glue.memoryToJSVar(message);
-    socket.websocket.send(message);
+    socket.websocket.send(glue.memoryToJSVar(message));
     return ppapi.PP_OK;
   };
 
-  var WebSocket_GetBufferedAmount = function(socket) {
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+  var WebSocket_GetBufferedAmount = function(socketResource) {
+    var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return 0;
     }
-    if (!socket.websocket){
+    if (!hasSocketClassConnected(socket)) {
         return 0;
     }
     return socket.websocket.bufferedAmount;
   };
 
-  var WebSocket_GetCloseCode = function(socket) {
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+  var WebSocket_GetCloseCode = function(socketResource) {
+    var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return 0;
     }
     return socket.closeCode;
   };
 
-  var WebSocket_GetCloseReason = function(socket) {
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+  var WebSocket_GetCloseReason = function(socketResource) {
+    var socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return ppappi.PP_VARTYPE_UNDEFINED;
     }
     return socket.closeReason;
   };
 
-  var WebSocket_GetCloseWasClean = function(socket) {
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+  var WebSocket_GetCloseWasClean = function(socketResource) {
+    var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return 0;
     }
     return socket.closeWasClean;
   };
 
-  var WebSocket_GetExtensions = function(socket) {
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+  var WebSocket_GetExtensions = function(socketResource) {
+    var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return ppapi.PP_VARTYPE_UNDEFINED;
     }
     return "";
   };
 
-  var WebSocket_GetProtocol = function(socket) {
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+  var WebSocket_GetProtocol = function(socketResource) {
+    var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return ppapi.PP_VARTYPE_UNDEFINED;
     }
-    if (!socket.websocket){
+    if (!hasSocketClassConnected(socket)) {
         return "";
     }
     return socket.websocket.protocol;
   };
 
-  var WebSocket_GetReadyState = function(socket) {
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+  var WebSocket_GetReadyState = function(socketResource) {
+    var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
-      return ppapi.PP_VARTYPE_UNDEFINED;
+        return ppapi.PP_VARTYPE_UNDEFINED;
     }
-    if (!socket.websocket){
+    if (!hasSocketClassConnected(socket)) {
         return ppapi.PP_WEBSOCKETREADYSTATE_INVALID;
     }
     return socket.websocket.readyState;
   };
 
-  var WebSocket_GetURL = function(socket) {
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+  var WebSocket_GetURL = function(socketResource) {
+    var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return ppapi.PP_VARTYPE_UNDEFINED;
     }
-    if (!socket.websocket){
+    if (!hasSocketClassConnected(socket)) {
         return "";
     }
     return socket.websocket.url;

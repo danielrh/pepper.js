@@ -44,27 +44,27 @@ Module* singleton_ = NULL;
 
 }  // namespace
 
-PP_Bool Instance_DidCreate(PP_Instance /*pp_instance*/,
-                           uint32_t /*argc*/,
-                           const char* /*argn*/[],
-                           const char* /*argv*/[]) {
+PP_Bool Instance_DidCreate(PP_Instance pp_instance,
+                           uint32_t argc,
+                           const char* argn[],
+                           const char* argv[]) {
   printf("--- Instance_DidCreate\n");
   return PP_TRUE;
 }
 
-void Instance_DidDestroy(PP_Instance /*instance*/) {
+void Instance_DidDestroy(PP_Instance instance) {
   printf("--- Instance_DidDestroy\n");
 }
 
-void Instance_DidChangeView(PP_Instance /*pp_instance*/, PP_Resource /*view*/) {
+void Instance_DidChangeView(PP_Instance pp_instance, PP_Resource view) {
 }
 
-void Instance_DidChangeFocus(PP_Instance /*pp_instance*/,
-                             PP_Bool /*has_focus*/) {
+void Instance_DidChangeFocus(PP_Instance pp_instance,
+                             PP_Bool has_focus) {
 }
 
-PP_Bool Instance_HandleDocumentLoad(PP_Instance /*pp_instance*/,
-                                    PP_Resource /*pp_url_loader*/) {
+PP_Bool Instance_HandleDocumentLoad(PP_Instance pp_instance,
+                                    PP_Resource pp_url_loader) {
   return PP_FALSE;
 }
 

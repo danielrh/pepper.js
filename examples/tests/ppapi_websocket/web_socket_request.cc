@@ -8,9 +8,6 @@
 #include <string>
 #include <sstream>
 
-//#include "native_client/src/include/portability.h"
-//#include "native_client/src/include/nacl_macros.h"
-//#include "native_client/src/shared/platform/nacl_check.h"
 #include "tests/common.h"
 #include "tests/ppapi_websocket/module.h"
 #include "ppapi/c/pp_bool.h"
