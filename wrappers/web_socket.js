@@ -95,8 +95,7 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
       return ppapi.PP_ERROR_BADRESOURCE;
     }
     var callback = glue.getCompletionCallback(cCallback);
-    var req;
-    req = new WebSocket(glue.memoryToJSVar(url), protocol);
+    var req = new WebSocket(glue.memoryToJSVar(url), protocol);
     req.binaryType = "arraybuffer";
     socket.websocket = req;
     socket.closeWasClean = false;
@@ -108,13 +107,13 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
     socket.receiveQueue = new Queue();
 
     req.onclose = function (evt) {
+        socket.closeWasClean = evt.wasClean;
+        socket.closeCode = evt.closeCode;
+        socket.closeReason = evt.closeReason;
         if (socket.closeCallback !== null && !socket.dead) {
             socket.closeCallback(ppapi.PP_OK);
             socket.closeCallback = null;
         }
-        socket.closeWasClean = evt.wasClean;
-        socket.closeCode = evt.closeCode;
-        socket.closeReason = evt.closeReason;
     };
     req.onmessage = function(evt) {
         if (socket.onmessageCallback !== null) {
@@ -145,6 +144,7 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
 
     return ppapi.PP_OK_COMPLETIONPENDING;
   };
+
   var hasSocketClassConnected = function(socket) {
       if (socket.websocket) {
           return true;
@@ -153,8 +153,8 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
       }
   };
 
-  var WebSocket_Close = function(socket, codeUint16, reason, callback) {
-    socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
+  var WebSocket_Close = function(socketResource, codeUint16, reason, callback) {
+    var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
       return ppapi.PP_ERROR_BADRESOURCE;
     }
@@ -231,14 +231,12 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
   var returnString = function(result, string){
     var memory = 0;
     var len = string.length;
-    if (len > 0) {
-      memory = _malloc(len + 1);   
-      for (var i = 0; i < len; i++) {
-        HEAPU8[memory + i] = string.charCodeAt(i);
-      }
-      // Null terminate the string because why not?
-      HEAPU8[memory + len] = 0;
+    memory = _malloc(len + 1);   
+    for (var i = 0; i < len; i++) {
+      HEAPU8[memory + i] = string.charCodeAt(i);
     }
+    // Null terminate the string because why not?
+    HEAPU8[memory + len] = 0;
     setValue(result, ppapi.PP_VARTYPE_STRING, 'i32');
     setValue(result + 8, resources.registerString(string, memory, len), 'i32');
   };
@@ -260,6 +258,7 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
     }
     return socket.closeWasClean;
   };
+
   var WebSocket_GetExtensions = function(result, socketResource) {
     var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
@@ -303,7 +302,6 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
         returnString(result, '');
         return;
     }
-
     returnString(result, socket.websocket.url);
     return;
   };

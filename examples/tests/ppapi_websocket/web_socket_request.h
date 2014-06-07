@@ -12,7 +12,6 @@
 #include "ppapi/c/pp_instance.h"
 #include "ppapi/c/pp_resource.h"
 #include "ppapi/c/pp_stdint.h"
-//#include "ppapi/c/trusted/ppb_file_io_trusted.h"
 
 
 class WebSocketRequest {
