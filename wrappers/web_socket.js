@@ -228,12 +228,29 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
     return socket.closeCode;
   };
 
-  var WebSocket_GetCloseReason = function(socketResource) {
+  var returnString = function(result, string){
+    var memory = 0;
+    var len = string.length;
+    if (len > 0) {
+      memory = _malloc(len + 1);   
+      for (var i = 0; i < len; i++) {
+        HEAPU8[memory + i] = string.charCodeAt(i);
+      }
+      // Null terminate the string because why not?
+      HEAPU8[memory + len] = 0;
+    }
+    setValue(result, ppapi.PP_VARTYPE_STRING, 'i32');
+    setValue(result + 8, resources.registerString(string, memory, len), 'i32');
+  };
+
+  var WebSocket_GetCloseReason = function(result, socketResource) {
     var socket = resources.resolve(socket, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
-      return ppappi.PP_VARTYPE_UNDEFINED;
+      glue.jsToMemoryVar(null, result);
+      return;
     }
-    return socket.closeReason;
+    returnString(result, socket.closeReason);
+    return;
   };
 
   var WebSocket_GetCloseWasClean = function(socketResource) {
@@ -243,46 +260,52 @@ http://creativecommons.org/publicdomain/zero/1.0/legalcode
     }
     return socket.closeWasClean;
   };
-
-  var WebSocket_GetExtensions = function(socketResource) {
+  var WebSocket_GetExtensions = function(result, socketResource) {
     var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
-      return ppapi.PP_VARTYPE_UNDEFINED;
+      glue.jsToMemoryVar(null, result);
     }
-    return "";
+    returnString(result, '');
+    return;
   };
 
-  var WebSocket_GetProtocol = function(socketResource) {
+  var WebSocket_GetProtocol = function(result, socketResource) {
     var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
-      return ppapi.PP_VARTYPE_UNDEFINED;
+      glue.jsToMemoryVar(null, result);
     }
     if (!hasSocketClassConnected(socket)) {
-        return "";
+        returnString (result, '');
+        return;
     }
-    return socket.websocket.protocol;
+    returnString(result, socket.websocket.protocol);
+    return;
   };
 
   var WebSocket_GetReadyState = function(socketResource) {
     var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
-        return ppapi.PP_VARTYPE_UNDEFINED;
+      return ppapi.PP_VARTYPE_UNDEFINED;
     }
     if (!hasSocketClassConnected(socket)) {
-        return ppapi.PP_WEBSOCKETREADYSTATE_INVALID;
+      return ppapi.PP_WEBSOCKETREADYSTATE_INVALID;
     }
     return socket.websocket.readyState;
   };
 
-  var WebSocket_GetURL = function(socketResource) {
+  var WebSocket_GetURL = function(result, socketResource) {
     var socket = resources.resolve(socketResource, WEB_SOCKET_RESOURCE);
     if (socket === undefined) {
-      return ppapi.PP_VARTYPE_UNDEFINED;
+        glue.jsToMemoryVar(null, result);
+        return;
     }
     if (!hasSocketClassConnected(socket)) {
-        return "";
+        returnString(result, '');
+        return;
     }
-    return socket.websocket.url;
+
+    returnString(result, socket.websocket.url);
+    return;
   };
 
   registerInterface("PPB_WebSocket;1.0", [

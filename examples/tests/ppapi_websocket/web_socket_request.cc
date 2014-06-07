@@ -112,6 +112,13 @@ bool WebSocketRequest::Load(std::string hex_file, std::string url) {
       PP_MakeCompletionCallback(::OpenCallback, this));
   Module::Get()->ppb_var_interface()->Release(protocol);
   Module::Get()->ppb_var_interface()->Release(value);
+  PP_Var returned_url = websocket_interface_->GetURL(websocket_);
+  std::string returned_url_ = Module::VarToStr(returned_url);
+
+  if (returned_url_ != url) {
+      ReportFailure("Returned url " + returned_url_ + " != "+url);
+  }
+  Module::Get()->ppb_var_interface()->Release(returned_url);
   return true;
 }
 
@@ -233,4 +240,16 @@ void WebSocketRequest::OpenCallback(int32_t pp_error) {
   } else if (retcode != PP_OK_COMPLETIONPENDING) {
     ReportFailure("WebSocketRequest::ReceiveMessage: ", retcode);
   }
+  PP_Var returned_protocol = websocket_interface_->GetProtocol(websocket_);
+  PP_Var returned_extensions = websocket_interface_->GetExtensions(websocket_);
+  std::string returned_protocol_ = Module::VarToStr(returned_protocol);
+  std::string returned_extensions_ = Module::VarToStr(returned_extensions);
+  if (returned_protocol_ != "") {
+      ReportFailure("Returned protocol " + returned_protocol_ + " != empty");
+  }
+  if (returned_extensions_ != "") {
+      ReportFailure("Returned extensions " + returned_extensions_ + " != empty");
+  }
+  Module::Get()->ppb_var_interface()->Release(returned_extensions);
+  Module::Get()->ppb_var_interface()->Release(returned_protocol);
 }
